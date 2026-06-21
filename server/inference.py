@@ -56,12 +56,18 @@ class VaceEngine:
             pipe.scheduler.config, flow_shift=GEN.flow_shift
         )
 
-        self._apply_lora(pipe)
-
+        # Order matters: materialize the model on-device BEFORE loading the LoRA.
+        # The CausVid T2V LoRA has no weights for VACE's vace_blocks / bias terms,
+        # so PEFT creates those adapter slots empty. If the LoRA is applied while
+        # the model is still on CPU/meta, those empty params stay on the `meta`
+        # device and `.to("cuda")` then fails ("Cannot copy out of meta tensor").
         if MODELS.offload == "model":
+            # CPU-offload hooks need the LoRA injected first, then offload.
+            self._apply_lora(pipe)
             pipe.enable_model_cpu_offload()
         else:
             pipe.to("cuda")
+            self._apply_lora(pipe)
 
         self.pipe = pipe
         self._loaded = True
@@ -78,8 +84,12 @@ class VaceEngine:
         """
         path = MODELS.lora_local_path
         try:
-            pipe.load_lora_weights(path, adapter_name="causvid")
+            # low_cpu_mem_usage=False: force adapter params to be created as real
+            # tensors (not on `meta`) so empty/missing-key slots don't break a
+            # later device move.
+            pipe.load_lora_weights(path, adapter_name="causvid", low_cpu_mem_usage=False)
             pipe.set_adapters(["causvid"], adapter_weights=[MODELS.causvid_lora_scale])
+            self._materialize_meta_params(pipe.transformer)
             print(f"[engine] CausVid LoRA applied @ {MODELS.causvid_lora_scale} ({path})",
                   flush=True)
         except Exception as e:  # noqa: BLE001
@@ -87,6 +97,38 @@ class VaceEngine:
                 f"Failed to load CausVid LoRA from {path}. The Kijai/ComfyUI LoRA "
                 f"format may need conversion for this diffusers version. Original: {e}"
             ) from e
+
+    @staticmethod
+    def _materialize_meta_params(module) -> None:
+        """Replace any params still on the `meta` device with real zero tensors.
+
+        LoRA adapter slots with no matching weights in the file (CausVid has none
+        for vace_blocks / biases) can land on `meta`. Zero is the correct value:
+        a zero lora_B / bias is an identity contribution, so this changes nothing
+        numerically — it just makes the params movable/usable.
+        """
+        device = next(
+            (p.device for p in module.parameters() if p.device.type != "meta"), None
+        )
+        if device is None:
+            device = torch.device("cuda")
+        n_fixed = 0
+        for name, p in list(module.named_parameters()):
+            if p.device.type != "meta":
+                continue
+            parent = module
+            *parents, leaf = name.split(".")
+            for attr in parents:
+                parent = getattr(parent, attr)
+            new_p = torch.nn.Parameter(
+                torch.zeros(p.shape, dtype=p.dtype, device=device),
+                requires_grad=p.requires_grad,
+            )
+            setattr(parent, leaf, new_p)
+            n_fixed += 1
+        if n_fixed:
+            print(f"[engine] materialized {n_fixed} empty (meta) LoRA params to zeros",
+                  flush=True)
 
     # -- text encoding (cached) --------------------------------------------
     def _text_embeds(self, cfg: GenConfig):
