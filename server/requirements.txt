@@ -5,7 +5,10 @@
 # torch < 2.6 (the RunPod base image torch). Do NOT bump to >=0.35 unless torch is
 # also upgraded to >=2.6 (see README "Troubleshooting").
 diffusers==0.34.0
-transformers>=4.49.0,<4.54
+# 4.49.0 still exports FLAX_WEIGHTS_NAME (removed in newer transformers, which
+# breaks diffusers 0.34.0's pipeline_loading_utils import) and satisfies
+# diffusers 0.34.0's >=4.41.2 floor.
+transformers==4.49.0
 accelerate>=1.4.0
 peft>=0.14.0
 safetensors>=0.4.5
