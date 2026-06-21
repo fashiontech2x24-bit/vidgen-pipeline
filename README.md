@@ -112,6 +112,23 @@ run.sh         start/restart server
 workflow_api.json · download_v2v.sh   (ComfyUI reference)
 ```
 
+## Troubleshooting
+
+**`infer_schema(func): Parameter q has unsupported type torch.Tensor`** on import
+of `WanVACEPipeline` — diffusers ≥0.35/main registers a flash-attn-3 custom op
+that needs torch ≥2.6, newer than the RunPod base image. Fixed by pinning
+`diffusers==0.34.0` (already in `requirements.txt`). In-place fix on a running pod:
+
+```bash
+pip install "diffusers==0.34.0"
+python -c "from diffusers import AutoencoderKLWan, WanVACEPipeline; print('import OK')"
+bash run.sh
+```
+
+If you instead want the latest diffusers (better CausVid LoRA conversion), upgrade
+torch first: `pip install "torch>=2.6" --index-url https://download.pytorch.org/whl/cu124`
+then `pip install "diffusers>=0.35"`.
+
 ## Docker (optional)
 
 A `docker/Dockerfile` is provided if you later want a baked image instead of

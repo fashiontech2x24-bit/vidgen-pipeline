@@ -1,9 +1,11 @@
 # torch / torchvision come from the CUDA base image — do NOT reinstall here.
 
-# diffusers main: WanVACEPipeline (reference_images) + Wan LoRA auto-conversion
-# (CausVid). Pin to a commit once validated on RunPod for reproducibility.
-diffusers @ git+https://github.com/huggingface/diffusers.git@main
-transformers>=4.49.0
+# diffusers 0.34.0: has WanVACEPipeline (reference_images) + CausVid LoRA loading,
+# but predates the attention_dispatch flash-attn-3 custom_op that breaks import on
+# torch < 2.6 (the RunPod base image torch). Do NOT bump to >=0.35 unless torch is
+# also upgraded to >=2.6 (see README "Troubleshooting").
+diffusers==0.34.0
+transformers>=4.49.0,<4.54
 accelerate>=1.4.0
 peft>=0.14.0
 safetensors>=0.4.5
