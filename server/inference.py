@@ -162,20 +162,17 @@ class VaceEngine:
         seed = GEN.seed if seed is None else seed
         timings: dict = {}
 
-        t = time.time()
-        try:
-            pos, neg = self._text_embeds(cfg)
-            text_kwargs = {"prompt_embeds": pos, "negative_prompt_embeds": neg}
-        except Exception as e:  # noqa: BLE001 — fall back to raw prompt if signature differs
-            print(f"[engine] prompt-embed cache disabled ({e}); using raw prompt", flush=True)
-            text_kwargs = {"prompt": cfg.prompt, "negative_prompt": cfg.negative_prompt}
-        timings["text_encode"] = time.time() - t
-
+        # Pass the prompt as a string (the documented path). The 0.34 VACE pipeline
+        # rejects prompt=None, so we don't pre-cache prompt_embeds here; text
+        # encoding is a small fixed cost inside pipe() and a candidate for later
+        # optimization once the batched path is built.
         generator = torch.Generator(device="cuda").manual_seed(seed)
 
         with self._lock:  # single GPU: serialize the two pair jobs cleanly
             t = time.time()
             out = self.pipe(
+                prompt=cfg.prompt,
+                negative_prompt=cfg.negative_prompt,
                 video=control_frames,
                 mask=mask,
                 reference_images=[reference_image],
@@ -187,7 +184,6 @@ class VaceEngine:
                 conditioning_scale=cfg.conditioning_scale,
                 generator=generator,
                 output_type="np",
-                **text_kwargs,
             )
             timings["denoise_decode"] = time.time() - t
 
