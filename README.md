@@ -94,6 +94,17 @@ python scripts/test_client.py \
   --image ref.png --c1 control1.mp4 --c2 control2.mp4
 ```
 
+## Local web app
+
+`webapp/index.html` is a self-contained page (open it directly in a browser —
+double-click, or `cd webapp && python -m http.server 5500` then visit
+`localhost:5500`). It does **not** work as a hosted artifact because it must call
+your pod directly. Paste the pod's `https://<POD_ID>-8000.proxy.runpod.net` URL,
+**Check** health, drop in a reference image + two control videos, **Generate** —
+it shows server inference time, end-to-end latency, client round-trip, plays both
+clips, and offers downloads. The server sends permissive CORS headers so the page
+can call it cross-origin.
+
 ## Configuration (env vars)
 
 All generation params are overridable without code changes — see `server/config.py`.

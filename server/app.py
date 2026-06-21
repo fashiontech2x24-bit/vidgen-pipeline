@@ -18,6 +18,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +30,17 @@ OUTPUT_DIR = os.environ.get("VID_OUTPUT_DIR", "/workspace/outputs")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 app = FastAPI(title="Wan2.1-VACE-14B Video Server")
+
+# The web app runs locally (file:// -> "null" origin, or localhost) and calls the
+# pod cross-origin, so allow all origins. No cookies/credentials are used.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
 app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
 _pool = ThreadPoolExecutor(max_workers=2)
 

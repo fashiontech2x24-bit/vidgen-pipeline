@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VACE Video Pipeline</title>
+<style>
+  :root {
+    --bg: #0d0f14; --panel: #161a22; --panel2: #1d222c; --line: #2a3140;
+    --text: #e6e9ef; --muted: #8c95a6; --accent: #6ea8fe; --accent2: #3b82f6;
+    --good: #34d399; --bad: #f87171; --warn: #fbbf24; --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 80px; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.2px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); margin: 0 0 14px; font-weight: 600;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input[type=text] {
+    width: 100%; background: var(--panel2); border: 1px solid var(--line);
+    color: var(--text); padding: 10px 12px; border-radius: 8px; font-size: 14px;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent2); }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row > div { flex: 1; }
+  button {
+    background: var(--accent2); color: #fff; border: 0; padding: 10px 16px;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: filter .15s; white-space: nowrap;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  button.ghost { background: var(--panel2); border: 1px solid var(--line); color: var(--text); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.good { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .dot.bad { background: var(--bad); }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .uploads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .uploads { grid-template-columns: 1fr; } .results { grid-template-columns: 1fr !important; } }
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+    background: var(--panel2); min-height: 150px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px; position: relative; overflow: hidden;
+  }
+  .drop:hover { border-color: var(--accent2); }
+  .drop .hint { font-size: 12px; color: var(--muted); }
+  .drop .name { font-size: 12px; color: var(--accent); word-break: break-all; }
+  .drop img, .drop video { max-width: 100%; max-height: 130px; border-radius: 6px; }
+  .drop .ico { font-size: 26px; opacity: .6; }
+  input[type=file] { display: none; }
+  .actions { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+  .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid var(--line);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .metrics { display: flex; flex-wrap: wrap; gap: 22px; margin: 4px 0 0; }
+  .metric { }
+  .metric .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .v small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .metric .k { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .results { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .result video { width: 100%; border-radius: 8px; background: #000; display: block; }
+  .result h3 { font-size: 14px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; }
+  .tbl { width: 100%; font-size: 12px; color: var(--muted); margin: 10px 0 12px; border-collapse: collapse; }
+  .tbl td { padding: 2px 0; }
+  .tbl td:last-child { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+  .err { color: var(--bad); font-size: 13px; white-space: pre-wrap; margin-top: 10px; }
+  .cfg { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .pill { display: inline-block; background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin: 2px 4px 2px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>VACE Video Pipeline</h1>
+    <span class="sub">Wan2.1-VACE-14B · reference image + 2 control videos → 2 clips</span>
+  </header>
+
+  <!-- Server config -->
+  <div class="panel">
+    <h2>Server</h2>
+    <div class="row">
+      <div>
+        <label>Server URL (RunPod HTTP 8000 proxy)</label>
+        <input id="url" type="text" placeholder="https://<POD_ID>-8000.proxy.runpod.net">
+      </div>
+      <button class="ghost" id="checkBtn" onclick="checkHealth()">Check</button>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Not connected</span></div>
+  </div>
+
+  <!-- Inputs -->
+  <div class="panel">
+    <h2>Inputs</h2>
+    <div class="uploads">
+      <div class="drop" id="drop-image" onclick="pick('image')">
+        <div class="ico">🖼️</div>
+        <div class="hint">Reference image</div>
+        <div class="name" id="name-image"></div>
+        <input type="file" id="file-image" accept="image/*" onchange="onPick('image')">
+      </div>
+      <div class="drop" id="drop-c1" onclick="pick('c1')">
+        <div class="ico">🎬</div>
+        <div class="hint">Control video 1</div>
+        <div class="name" id="name-c1"></div>
+        <input type="file" id="file-c1" accept="video/*" onchange="onPick('c1')">
+      </div>
+      <div class="drop" id="drop-c2" onclick="pick('c2')">
+        <div class="ico">🎬</div>
+        <div class="hint">Control video 2</div>
+        <div class="name" id="name-c2"></div>
+        <input type="file" id="file-c2" accept="video/*" onchange="onPick('c2')">
+      </div>
+    </div>
+    <div class="actions" style="margin-top:16px">
+      <button id="genBtn" onclick="generate()" disabled>Generate</button>
+      <div class="spinner" id="spinner"></div>
+      <span class="timer" id="timer"></span>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="panel" id="resultPanel" style="display:none">
+    <h2>Results</h2>
+    <div class="metrics" id="metrics"></div>
+    <div class="cfg" id="cfg"></div>
+    <div class="results" id="results" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<script>
+const files = { image: null, c1: null, c2: null };
+const $ = id => document.getElementById(id);
+
+// Persist server URL
+$("url").value = localStorage.getItem("vace_url") || "";
+$("url").addEventListener("input", () => localStorage.setItem("vace_url", $("url").value.trim()));
+
+function serverUrl() { return $("url").value.trim().replace(/\/+$/, ""); }
+function pick(k) { $("file-" + k).click(); }
+
+function onPick(k) {
+  const f = $("file-" + k).files[0];
+  if (!f) return;
+  files[k] = f;
+  $("name-" + k).textContent = f.name;
+  const drop = $("drop-" + k);
+  drop.querySelectorAll("img,video,.ico").forEach(e => e.remove());
+  const u = URL.createObjectURL(f);
+  let el;
+  if (f.type.startsWith("image")) { el = document.createElement("img"); el.src = u; }
+  else { el = document.createElement("video"); el.src = u; el.muted = true; el.loop = true; el.autoplay = true; }
+  drop.prepend(el);
+  refreshGen();
+}
+
+function refreshGen() {
+  $("genBtn").disabled = !(files.image && files.c1 && files.c2 && serverUrl());
+}
+$("url").addEventListener("input", refreshGen);
+
+async function checkHealth() {
+  const url = serverUrl();
+  if (!url) return;
+  $("statusText").textContent = "Checking…"; $("dot").className = "dot";
+  try {
+    const r = await fetch(url + "/health");
+    const j = await r.json();
+    const loaded = j.model_loaded;
+    $("dot").className = "dot " + (loaded ? "good" : "bad");
+    $("statusText").textContent = loaded
+      ? `Online · model loaded · ${j.model}`
+      : `Online · model NOT loaded yet`;
+  } catch (e) {
+    $("dot").className = "dot bad";
+    $("statusText").textContent = "Unreachable — check URL / port 8000 exposed. " + e;
+  }
+}
+
+let timerInt = null;
+function startTimer() {
+  const t0 = performance.now();
+  $("timer").textContent = "0.0s";
+  timerInt = setInterval(() => {
+    $("timer").textContent = ((performance.now() - t0) / 1000).toFixed(1) + "s";
+  }, 100);
+}
+function stopTimer() { clearInterval(timerInt); }
+
+async function generate() {
+  $("err").textContent = "";
+  $("genBtn").disabled = true;
+  $("spinner").style.display = "inline-block";
+  startTimer();
+
+  const fd = new FormData();
+  fd.append("user_image", files.image);
+  fd.append("control_video_1", files.c1);
+  fd.append("control_video_2", files.c2);
+
+  const t0 = performance.now();
+  try {
+    const r = await fetch(serverUrl() + "/generate", { method: "POST", body: fd });
+    if (!r.ok) throw new Error("HTTP " + r.status + " — " + (await r.text()).slice(0, 500));
+    const data = await r.json();
+    data._client_rtt = (performance.now() - t0) / 1000;
+    renderResults(data);
+  } catch (e) {
+    $("err").textContent = "Generation failed:\n" + e;
+  } finally {
+    stopTimer();
+    $("spinner").style.display = "none";
+    refreshGen();
+  }
+}
+
+function renderResults(data) {
+  $("resultPanel").style.display = "block";
+  const m = data.metrics_s || {};
+  $("metrics").innerHTML = `
+    ${metric("Inference (server)", m.inference_wall, "s")}
+    ${metric("End-to-end latency", m.end_to_end_latency, "s")}
+    ${metric("Client round-trip", data._client_rtt, "s")}
+  `;
+  const c = data.config || {};
+  $("cfg").innerHTML = Object.entries(c).map(([k, v]) =>
+    `<span class="pill">${k}: ${v}</span>`).join("");
+
+  const base = serverUrl();
+  $("results").innerHTML = "";
+  (data.results || []).forEach(res => {
+    const full = base + res.video_url;
+    const fname = res.video_url.split("/").pop();
+    const div = document.createElement("div");
+    div.className = "result";
+    const t = res.timings_s || {};
+    div.innerHTML = `
+      <h3><span>${res.tag}</span></h3>
+      <video src="${full}" controls autoplay loop muted playsinline></video>
+      <table class="tbl">
+        ${Object.entries(t).map(([k, v]) => `<tr><td>${k}</td><td>${v}s</td></tr>`).join("")}
+      </table>
+      <button class="ghost" style="width:100%">Download ${fname}</button>
+    `;
+    div.querySelector("button").onclick = () => downloadVideo(full, fname);
+    $("results").appendChild(div);
+  });
+}
+
+function metric(k, v, unit) {
+  const val = (v == null) ? "—" : Number(v).toFixed(2);
+  return `<div class="metric"><div class="v">${val}<small>${unit}</small></div><div class="k">${k}</div></div>`;
+}
+
+async function downloadVideo(url, filename) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e) {
+    window.open(url, "_blank"); // fallback: open in new tab
+  }
+}
+
+if (serverUrl()) checkHealth();
+refreshGen();
+</script>
+</body>
+</html>
