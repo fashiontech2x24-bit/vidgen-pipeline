@@ -1,0 +1,12 @@
+.git
+**/__pycache__
+**/*.pyc
+*.mp4
+*.png
+*.jpg
+workflow_api.json
+download_v2v.sh
+outputs/
+models/
+webapp/
+README.md

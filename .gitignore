@@ -1,0 +1,30 @@
+# caches / bytecode
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# models + generated artifacts (live on the RunPod /workspace volume)
+models/
+outputs/
+*.safetensors
+*.ckpt
+*.pth
+*.onnx
+
+# media samples (don't commit test inputs/outputs)
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.avi
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# secrets
+.env
+*token*
+*.pem
